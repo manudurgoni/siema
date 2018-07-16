@@ -24,6 +24,8 @@ export default class Siema {
     // Create global references
     this.selectorWidth = this.selector.offsetWidth;
     this.innerElements = [].slice.call(this.selector.children);
+    this.innerElementsLength = this.innerElements.length;
+    this.percentDrag = 0;
     this.currentSlide = this.config.loop ?
       this.config.startIndex % this.innerElements.length :
       Math.max(0, Math.min(this.config.startIndex, this.innerElements.length - this.perPage));
@@ -60,6 +62,7 @@ export default class Siema {
       rtl: false,
       onInit: () => {},
       onChange: () => {},
+      onDrag: () => {}
     };
 
     const userSttings = options;
@@ -158,6 +161,7 @@ export default class Siema {
    * Build a sliderFrame and slide to a current item.
    */
   buildSliderFrame() {
+    this.innerElementsLength = this.innerElements.length;
     this.widthItem = this.selectorWidth / this.perPage * (1 - this.originalOffset);
     const itemsToBuild = this.config.loop ? this.innerElements.length + (2 * this.perPage) : this.innerElements.length;
 
@@ -467,8 +471,8 @@ export default class Siema {
     this.pointerDown = true;
     this.drag.startX = e.touches[0].pageX;
     this.drag.startY = e.touches[0].pageY;
+    this.resetPercentDrag();
   }
-
 
   /**
    * touchend event handler
@@ -477,12 +481,12 @@ export default class Siema {
     e.stopPropagation();
     this.pointerDown = false;
     this.enableTransition();
+    this.resetPercentDrag();
     if (this.drag.endX) {
       this.updateAfterDrag();
     }
     this.clearDrag();
   }
-
 
   /**
    * touchmove event handler
@@ -526,12 +530,12 @@ export default class Siema {
     this.pointerDown = false;
     this.selector.style.cursor = '-webkit-grab';
     this.enableTransition();
+    this.resetPercentDrag();
     if (this.drag.endX) {
       this.updateAfterDrag();
     }
     this.clearDrag();
   }
-
 
   /**
    * mousemove event handler
@@ -549,6 +553,8 @@ export default class Siema {
       this.drag.endX = e.pageX;
       this.selector.style.cursor = '-webkit-grabbing';
 
+      this.getPercentDrag();
+
       this.translateSliderFrame();
     }
   }
@@ -562,6 +568,7 @@ export default class Siema {
       this.selector.style.cursor = '-webkit-grab';
       this.drag.endX = e.pageX;
       this.drag.preventClick = false;
+      this.resetPercentDrag();
       this.enableTransition();
       this.updateAfterDrag();
       this.clearDrag();
@@ -587,6 +594,28 @@ export default class Siema {
     return this.config.rtl ? currentOffset + dragOffset : currentOffset - dragOffset;
   }
 
+  getPercentDrag() {
+    const startOffset = this.getCurrentOffset();
+    const offset = this.getOffset();
+    const drag = (offset - startOffset) / this.widthItem;
+    this.predictSlide = this.currentSlide + (offset >= startOffset ? Math.ceil(drag) : Math.floor(drag));
+    this.percentDrag = drag % 1;
+
+    if (this.predictSlide < 0) {
+      this.predictSlide = this.innerElementsLength + this.predictSlide;
+      this.config.onDrag(this.percentDrag, this.predictSlide);
+      return;
+    }
+
+    if (this.predictSlide > this.innerElementsLength) {
+      this.predictSlide = this.predictSlide - this.innerElementsLength;
+      this.config.onDrag(this.percentDrag, this.predictSlide);
+      return;
+    }
+
+    this.config.onDrag(this.percentDrag, this.predictSlide);
+  }
+
   /**
    * Apply translate3d on carousel with new offset calculation
    *
@@ -597,6 +626,11 @@ export default class Siema {
 
     const offset = this.getOffset();
     this.sliderFrame.style[this.transformProperty] = `translate3d(${(this.config.rtl ? 1 : -1) * offset}px, 0, 0)`;
+  }
+
+  resetPercentDrag() {
+    this.predictSlide = this.currentSlide;
+    this.percentDrag = 0;
   }
 
   /**
